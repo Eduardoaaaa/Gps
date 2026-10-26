@@ -67,6 +67,13 @@
                                 <option value="fora">Fora da Visita (%)</option>
                                 <option value="nao">Não Pediu (%)</option>
                             </select>
+                            <label style="margin-left: 15px;"><b>Período Gráfico:</b></label>
+                            <select id="filtro_periodo" onchange="desenharGrafico()">
+                                <option value="7">Últimos 7 Dias</option>
+                                <option value="15">Últimos 15 Dias</option>
+                                <option value="30">Últimos 30 Dias</option>
+                                <option value="all" selected>Todo o Histórico</option>
+                            </select>
                         </div>
                     </div>
                     <div class="chart-container"><canvas id="graficoEvolucao"></canvas></div>
@@ -80,7 +87,7 @@
                             <select id="data_selector_rank" onchange="renderizarRanking()"></select>
                         </div>
                     </div>
-                    <p class="info-meta">💡 Defina a meta diária individualmente na caixa amarela de cada vendedor. As metas sincronizam-se com as importações JSON.</p>
+                    <p class="info-meta">💡 As Tabelas de Ranking (Diário e Total) agora mostram a operação de forma Unificada, incluindo a coluna "Mesa" para fácil visualização.</p>
                     <div id="ranking_area"></div>
                 </div>
 
@@ -97,7 +104,7 @@
 
                 <div id="tab_total" class="tab-content">
                     <div class="header-controls">
-                        <p class="info-meta" style="margin-bottom:0;">💡 Este painel soma TODAS as visitas e positivações registadas, dividido por Unidade e Mesa. O ranking é definido <b>do Melhor para o Pior em Produtividade Total</b>.</p>
+                        <p class="info-meta" style="margin-bottom:0;">💡 Este painel soma TODAS as visitas e positivações registadas (Operação Unificada). O ranking é definido <b>do Melhor para o Pior em Produtividade Total</b>.</p>
                     </div>
                     <div id="ranking_total_area"></div>
                 </div>
@@ -126,7 +133,6 @@
                     'ABS Altamira': 'Jhonnes'
                 };
 
-                // Larguras fixas de coluna para alinhar perfeitamente todas as Mesas e o TOTAL GERAL da Operação
                 const colgroupDash = `<colgroup>
                     <col style="width: 24%;">
                     <col style="width: 10%;">
@@ -138,19 +144,6 @@
                     <col style="width: 7%;">
                     <col style="width: 10%;">
                     <col style="width: 14%;">
-                </colgroup>`;
-
-                const colgroupHist = `<colgroup>
-                    <col style="width: 6%;">
-                    <col style="width: 20%;">
-                    <col style="width: 12%;">
-                    <col style="width: 7.5%;">
-                    <col style="width: 7.5%;">
-                    <col style="width: 7.5%;">
-                    <col style="width: 7.5%;">
-                    <col style="width: 7.5%;">
-                    <col style="width: 7.5%;">
-                    <col style="width: 17%;">
                 </colgroup>`;
 
                 function obterInfoVendedor(vendedor) {
@@ -213,7 +206,16 @@
 
                 function desenharGrafico() {
                     const metric = document.getElementById('metric_selector').value;
-                    const labelsData = datasDisponiveis;
+                    const periodo = document.getElementById('filtro_periodo').value;
+                    
+                    let labelsData = datasDisponiveis;
+                    if (periodo !== 'all') {
+                        let limit = parseInt(periodo);
+                        if (labelsData.length > limit) {
+                            labelsData = labelsData.slice(labelsData.length - limit);
+                        }
+                    }
+
                     const dadosTucurui = [], dadosAltamira = [];
                     let calcPercGrafico = (val, total) => total > 0 ? ((val / total) * 100).toFixed(1) : 0;
 
@@ -252,7 +254,7 @@
                 function calcPerc(part, total) { return total === 0 ? "0%" : Math.round((part / total) * 100) + "%"; }
 
                 // ==============================================================
-                // ABA 1: DASHBOARD DIÁRIO DIVIDIDO POR UNIDADE E MESA (ALINHADO)
+                // ABA 1: DASHBOARD DIÁRIO DIVIDIDO POR MESA
                 // ==============================================================
                 function renderizarTabelas() {
                     const dataSel = document.getElementById('data_selector_dash').value;
@@ -294,7 +296,7 @@
                 }
 
                 // ==============================================================
-                // ABA 2: RANKING DIÁRIO DIVIDIDO POR UNIDADE E MESA
+                // ABA 2: RANKING DIÁRIO (UNIFICADO)
                 // ==============================================================
                 function renderizarRanking() {
                     const dataSel = document.getElementById('data_selector_rank').value;
@@ -312,7 +314,6 @@
                         let textMeta = metaAtual === 0 ? 'Sem Meta' : (atingiu ? '✅ Atingiu' : `❌ Faltam ${metaAtual - r.Visita_Posi}`);
                         let classMeta = metaAtual === 0 ? 'meta-none' : (atingiu ? 'meta-ok' : 'meta-fail');
                         let medalha = (idx + 1) + 'º'; if(idx === 0) medalha = '🥇'; else if(idx === 1) medalha = '🥈'; else if(idx === 2) medalha = '🥉';
-
                         html += `<tr><td class="medal">${medalha}</td><td class="text-left">${r.Vendedor}</td><td>${r.Unidade}</td><td>${r.Mesa}</td><td>${r.Visitas_TT}</td><td class="val-col" style="font-size:16px;">${r.Visita_Posi}</td><td><input type="number" value="${metaAtual}" min="0" class="input-meta" onchange="salvarMetaRank('${dataSel}', '${r.Vendedor}', this.value)"></td><td><span class="${classMeta}">${textMeta}</span></td></tr>`;
                     });
                     html += `</tbody></table>`;
@@ -320,35 +321,27 @@
                     ['ABS Tucuruí', 'ABS Altamira'].forEach(und => {
                         let dadosUnd = dadosDia.filter(d => d.Unidade === und);
                         if (dadosUnd.length === 0) return;
+                        dadosUnd.sort((a, b) => b.Visita_Posi - a.Visita_Posi);
 
                         let gestor = gestoresUnidade[und] ? ` — ${gestoresUnidade[und]}` : '';
                         html += `<div class="unidade-section"><h3 class="unidade-title">🏆 Ranking - ${und}${gestor}</h3>`;
-
-                        const mesasUnidade = Object.keys(estruturaMesas[und] || {});
-                        mesasUnidade.forEach(nomeMesa => {
-                            let dadosMesa = dadosUnd.filter(d => d.Mesa === nomeMesa);
-                            if (dadosMesa.length === 0) return;
-                            dadosMesa.sort((a, b) => b.Visita_Posi - a.Visita_Posi);
-
-                            html += `<div class="mesa-title">📋 ${nomeMesa}</div>`;
-                            html += `<table><thead><tr><th style="width:60px;">Pos</th><th class="text-left">Vendedor</th><th>Total de Visitas</th><th>Visitas Posi. (Realizado)</th><th>🎯 Meta Diária</th><th>Status da Meta</th></tr></thead><tbody>`;
-                            dadosMesa.forEach((r, idx) => {
-                                let metaAtual = (metasGlobais[dataSel] && metasGlobais[dataSel][r.Vendedor]) ? metasGlobais[dataSel][r.Vendedor] : 0;
-                                let atingiu = metaAtual > 0 && r.Visita_Posi >= metaAtual;
-                                let textMeta = metaAtual === 0 ? 'Sem Meta' : (atingiu ? '✅ Atingiu' : `❌ Faltam ${metaAtual - r.Visita_Posi}`);
-                                let classMeta = metaAtual === 0 ? 'meta-none' : (atingiu ? 'meta-ok' : 'meta-fail');
-                                let medalha = (idx + 1) + 'º'; if(idx === 0) medalha = '🥇'; else if(idx === 1) medalha = '🥈'; else if(idx === 2) medalha = '🥉';
-                                html += `<tr><td class="medal">${medalha}</td><td class="text-left">${r.Vendedor}</td><td>${r.Visitas_TT}</td><td class="val-col" style="font-size:16px;">${r.Visita_Posi}</td><td><input type="number" value="${metaAtual}" min="0" class="input-meta" onchange="salvarMetaRank('${dataSel}', '${r.Vendedor}', this.value)"></td><td><span class="${classMeta}">${textMeta}</span></td></tr>`;
-                            });
-                            html += `</tbody></table>`;
+                        html += `<table><thead><tr><th style="width:60px;">Pos</th><th class="text-left">Vendedor</th><th>Mesa</th><th>Total de Visitas</th><th>Visitas Posi. (Realizado)</th><th>🎯 Meta Diária</th><th>Status da Meta</th></tr></thead><tbody>`;
+                        
+                        dadosUnd.forEach((r, idx) => {
+                            let metaAtual = (metasGlobais[dataSel] && metasGlobais[dataSel][r.Vendedor]) ? metasGlobais[dataSel][r.Vendedor] : 0;
+                            let atingiu = metaAtual > 0 && r.Visita_Posi >= metaAtual;
+                            let textMeta = metaAtual === 0 ? 'Sem Meta' : (atingiu ? '✅ Atingiu' : `❌ Faltam ${metaAtual - r.Visita_Posi}`);
+                            let classMeta = metaAtual === 0 ? 'meta-none' : (atingiu ? 'meta-ok' : 'meta-fail');
+                            let medalha = (idx + 1) + 'º'; if(idx === 0) medalha = '🥇'; else if(idx === 1) medalha = '🥈'; else if(idx === 2) medalha = '🥉';
+                            html += `<tr><td class="medal">${medalha}</td><td class="text-left">${r.Vendedor}</td><td>${r.Mesa}</td><td>${r.Visitas_TT}</td><td class="val-col" style="font-size:16px;">${r.Visita_Posi}</td><td><input type="number" value="${metaAtual}" min="0" class="input-meta" onchange="salvarMetaRank('${dataSel}', '${r.Vendedor}', this.value)"></td><td><span class="${classMeta}">${textMeta}</span></td></tr>`;
                         });
-                        html += `</div>`;
+                        html += `</tbody></table></div>`;
                     });
                     area.innerHTML = html;
                 }
 
                 // ==============================================================
-                // ABA 4: RANKING HISTÓRICO TOTAL DIVIDIDO POR UNIDADE E MESA (ALINHADO)
+                // ABA 4: RANKING HISTÓRICO TOTAL (UNIFICADO)
                 // ==============================================================
                 function renderizarRankingTotal() {
                     const area = document.getElementById('ranking_total_area');
@@ -364,15 +357,12 @@
                     });
 
                     let lista = Object.values(totais);
-                    
                     lista.forEach(r => {
                         r.Produtividade_Perc = r.TT > 0 ? ((r.Posi + r.Fora) / r.TT) * 100 : 0;
                     });
 
                     lista.sort((a, b) => {
-                        if (b.Produtividade_Perc !== a.Produtividade_Perc) {
-                            return b.Produtividade_Perc - a.Produtividade_Perc;
-                        }
+                        if (b.Produtividade_Perc !== a.Produtividade_Perc) return b.Produtividade_Perc - a.Produtividade_Perc;
                         return b.Posi - a.Posi; 
                     });
 
@@ -382,21 +372,7 @@
                     lista.forEach((r, idx) => {
                         let medalha = (idx + 1) + 'º'; 
                         if(idx === 0) medalha = '🥇'; else if(idx === 1) medalha = '🥈'; else if(idx === 2) medalha = '🥉';
-                        
-                        html += `<tr>
-                            <td class="medal">${medalha}</td>
-                            <td class="text-left" style="font-size:16px;">${r.Vendedor}</td>
-                            <td>${r.Unidade}</td>
-                            <td>${r.Mesa}</td>
-                            <td>${r.TT}</td>
-                            <td class="val-col" style="color:#27ae60; font-size:16px;">${r.Posi}</td>
-                            <td class="perc-col">${calcPerc(r.Posi, r.TT)}</td>
-                            <td class="val-col" style="color:#e74c3c;">${r.Fora}</td>
-                            <td class="perc-col">${calcPerc(r.Fora, r.TT)}</td>
-                            <td class="val-col" style="color:#7f8c8d;">${r.Nao}</td>
-                            <td class="perc-col">${calcPerc(r.Nao, r.TT)}</td>
-                            <td class="prod-final">${r.Produtividade_Perc.toFixed(1)}%</td>
-                        </tr>`;
+                        html += `<tr><td class="medal">${medalha}</td><td class="text-left" style="font-size:16px;">${r.Vendedor}</td><td>${r.Unidade}</td><td>${r.Mesa}</td><td>${r.TT}</td><td class="val-col" style="color:#27ae60; font-size:16px;">${r.Posi}</td><td class="perc-col">${calcPerc(r.Posi, r.TT)}</td><td class="val-col" style="color:#e74c3c;">${r.Fora}</td><td class="perc-col">${calcPerc(r.Fora, r.TT)}</td><td class="val-col" style="color:#7f8c8d;">${r.Nao}</td><td class="perc-col">${calcPerc(r.Nao, r.TT)}</td><td class="prod-final">${r.Produtividade_Perc.toFixed(1)}%</td></tr>`;
                     });
                     html += '</tbody></table>';
 
@@ -406,43 +382,19 @@
 
                         let uTT = 0, uPosi = 0, uFora = 0, uNao = 0;
                         let gestor = gestoresUnidade[und] ? ` — ${gestoresUnidade[und]}` : '';
+                        
                         html += `<div class="unidade-section"><h3 class="unidade-title">🌟 Acumulado Histórico - ${und}${gestor}</h3>`;
+                        html += `<table><thead><tr><th style="width:60px;">Pos</th><th class="text-left">Vendedor</th><th>Mesa</th><th>Total Visitas</th><th colspan="2">Total Posi. ✅</th><th colspan="2">Total Fora ❌</th><th colspan="2">Não Pediu 🏠</th><th>Produtividade Total</th></tr></thead><tbody>`;
 
-                        const mesasUnidade = Object.keys(estruturaMesas[und] || {});
-                        mesasUnidade.forEach(nomeMesa => {
-                            let listaMesa = listaUnd.filter(d => d.Mesa === nomeMesa);
-                            if (listaMesa.length === 0) return;
-
-                            let mTT = 0, mPosi = 0, mFora = 0, mNao = 0;
-                            html += `<div class="mesa-title">📋 ${nomeMesa}</div>`;
-                            html += `<table class="tabela-alinhada">${colgroupHist}<thead><tr><th>Pos</th><th class="text-left">Vendedor</th><th>Total Visitas</th><th colspan="2">Total Posi. ✅</th><th colspan="2">Total Fora ❌</th><th colspan="2">Não Pediu 🏠</th><th>Produtividade Total</th></tr></thead><tbody>`;
-
-                            listaMesa.forEach((r, idx) => {
-                                mTT += r.TT; mPosi += r.Posi; mFora += r.Fora; mNao += r.Nao;
-                                uTT += r.TT; uPosi += r.Posi; uFora += r.Fora; uNao += r.Nao;
-                                let medalha = (idx + 1) + 'º'; 
-                                if(idx === 0) medalha = '🥇'; else if(idx === 1) medalha = '🥈'; else if(idx === 2) medalha = '🥉';
-                                
-                                html += `<tr>
-                                    <td class="medal">${medalha}</td>
-                                    <td class="text-left" style="font-size:16px;">${r.Vendedor}</td>
-                                    <td>${r.TT}</td>
-                                    <td class="val-col" style="color:#27ae60; font-size:16px;">${r.Posi}</td>
-                                    <td class="perc-col">${calcPerc(r.Posi, r.TT)}</td>
-                                    <td class="val-col" style="color:#e74c3c;">${r.Fora}</td>
-                                    <td class="perc-col">${calcPerc(r.Fora, r.TT)}</td>
-                                    <td class="val-col" style="color:#7f8c8d;">${r.Nao}</td>
-                                    <td class="perc-col">${calcPerc(r.Nao, r.TT)}</td>
-                                    <td class="prod-final">${r.Produtividade_Perc.toFixed(1)}%</td>
-                                </tr>`;
-                            });
-
-                            let prodMesa = mTT > 0 ? (((mPosi + mFora) / mTT) * 100).toFixed(1) : "0.0";
-                            html += `</tbody><tfoot><tr class="footer-row"><td colspan="2" class="text-left">TT (${nomeMesa.split(' ')[0]} ${nomeMesa.split(' ')[1]})</td><td>${mTT}</td><td class="val-col" style="color:#27ae60;">${mPosi}</td><td class="perc-col">${calcPerc(mPosi, mTT)}</td><td class="val-col" style="color:#e74c3c;">${mFora}</td><td class="perc-col">${calcPerc(mFora, mTT)}</td><td class="val-col" style="color:#7f8c8d;">${mNao}</td><td class="perc-col">${calcPerc(mNao, mTT)}</td><td class="prod-final">${prodMesa}%</td></tr></tfoot></table>`;
+                        listaUnd.forEach((r, idx) => {
+                            uTT += r.TT; uPosi += r.Posi; uFora += r.Fora; uNao += r.Nao;
+                            let medalha = (idx + 1) + 'º'; 
+                            if(idx === 0) medalha = '🥇'; else if(idx === 1) medalha = '🥈'; else if(idx === 2) medalha = '🥉';
+                            html += `<tr><td class="medal">${medalha}</td><td class="text-left" style="font-size:16px;">${r.Vendedor}</td><td>${r.Mesa}</td><td>${r.TT}</td><td class="val-col" style="color:#27ae60; font-size:16px;">${r.Posi}</td><td class="perc-col">${calcPerc(r.Posi, r.TT)}</td><td class="val-col" style="color:#e74c3c;">${r.Fora}</td><td class="perc-col">${calcPerc(r.Fora, r.TT)}</td><td class="val-col" style="color:#7f8c8d;">${r.Nao}</td><td class="perc-col">${calcPerc(r.Nao, r.TT)}</td><td class="prod-final">${r.Produtividade_Perc.toFixed(1)}%</td></tr>`;
                         });
 
                         let prodUnd = uTT > 0 ? (((uPosi + uFora) / uTT) * 100).toFixed(1) : "0.0";
-                        html += `<table class="tabela-alinhada" style="margin-top: 10px; margin-bottom: 0;">${colgroupHist}<tfoot><tr class="footer-row" style="background:#dce4eb !important;"><td colspan="2" class="text-left">TOTAL ACUMULADO ${und.toUpperCase()}</td><td>${uTT}</td><td class="val-col" style="color:#27ae60;">${uPosi}</td><td class="perc-col">${calcPerc(uPosi, uTT)}</td><td class="val-col" style="color:#e74c3c;">${uFora}</td><td class="perc-col">${calcPerc(uFora, uTT)}</td><td class="val-col" style="color:#7f8c8d;">${uNao}</td><td class="perc-col">${calcPerc(uNao, uTT)}</td><td class="prod-final">${prodUnd}%</td></tr></tfoot></table></div>`;
+                        html += `</tbody><tfoot><tr class="footer-row" style="background:#dce4eb !important;"><td colspan="3" class="text-left">TOTAL ACUMULADO ${und.toUpperCase()}</td><td>${uTT}</td><td class="val-col" style="color:#27ae60;">${uPosi}</td><td class="perc-col">${calcPerc(uPosi, uTT)}</td><td class="val-col" style="color:#e74c3c;">${uFora}</td><td class="perc-col">${calcPerc(uFora, uTT)}</td><td class="val-col" style="color:#7f8c8d;">${uNao}</td><td class="perc-col">${calcPerc(uNao, uTT)}</td><td class="prod-final">${prodUnd}%</td></tr></tfoot></table></div>`;
                     });
 
                     area.innerHTML = html;
@@ -483,19 +435,19 @@
                         if(!vendorStats[r.Vendedor]) vendorStats[r.Vendedor] = { Unidade: r.Unidade, Mesa: r.Mesa, count: 0, tt: 0, posi: 0, fora: 0, nao: 0 };
                         vendorStats[r.Vendedor].count++; vendorStats[r.Vendedor].tt += r.Visitas_TT; vendorStats[r.Vendedor].posi += r.Visita_Posi; vendorStats[r.Vendedor].fora += r.Fora_Visita; vendorStats[r.Vendedor].nao += r.Nao_Pediu;
                     });
-
-                    const todosStats = Object.keys(vendorStats).map(v => {
+                    const porUnidade = { 'ABS Tucuruí': [], 'ABS Altamira': [] };
+                    Object.keys(vendorStats).forEach(v => {
                         let st = vendorStats[v]; st.Vendedor = v;
                         st.avg_tt = (st.tt / st.count).toFixed(1);
                         st.avg_posi = (st.posi / st.count).toFixed(1);
                         st.avg_fora = (st.fora / st.count).toFixed(1);
                         st.avg_nao = (st.nao / st.count).toFixed(1);
                         st.prod = st.tt > 0 ? (((st.posi + st.fora) / st.tt) * 100).toFixed(1) : 0;
-                        return st;
+                        if(porUnidade[st.Unidade]) porUnidade[st.Unidade].push(st);
                     });
 
                     ['ABS Tucuruí', 'ABS Altamira'].forEach(und => {
-                        let listaUnd = todosStats.filter(s => s.Unidade === und);
+                        let listaUnd = porUnidade[und];
                         if(!listaUnd || listaUnd.length === 0) return;
 
                         let gestor = gestoresUnidade[und] ? ` — ${gestoresUnidade[und]}` : '';
